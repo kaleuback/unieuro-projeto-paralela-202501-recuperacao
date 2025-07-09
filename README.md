@@ -105,4 +105,8 @@ Recomendação: para tarefas CPU-bound com alta carga computacional, use `multip
  [NumPy e liberação do GIL](https://numpy.org/devdocs/user/c-info.how-to-extend.html#releasing-the-gil)  
  [Módulo `multiprocessing` do Python](https://docs.python.org/3/library/multiprocessing.html)  
 
+# Graficos:
+![graficos](https://github.com/user-attachments/assets/8d411f8e-b902-412b-93fa-121d754da1bf)
+
+
 # Projeto desenvolvido para a disciplina de Programação Paralela — UNIEURO 2025/01
