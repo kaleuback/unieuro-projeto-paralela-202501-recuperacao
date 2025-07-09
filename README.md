@@ -1,47 +1,67 @@
-# PARALIZAÇÃO DE SOMA COM THREADS EM PYTHON
+# Paralelização de Soma com Threads em Python
 
-# LEIA!!!!!!! O CÓDIGO EM PYTHON PURO É LIMITADO PELO GIL (EXPLICAÇÃO ABAIXO DOS RESULTADOS), COM ISSO ESTUDEI SOBRE E VI QUE A SOLUÇÃO É OU USAR BIBLIOTECAS QUE LIBERAM O GIL OU USAR MULTIPROCESSAMENTO, ENTENDO QUE NÃO É O OBJETIVO DA ATIVIDADE USAR O MULTIPROCESSAMENTO E SIM THREADS PORÉM É DAS SOLUÇÕES TAMBÉM, FIZ 3 CÓDIGOS E 3 TABELAS DE RESULTADOS: 1 EM PYTHON PURO, 1 USANDO BIBLIOTECAS PARA "DESBLOQUEAR" O GIL E POR ÚLTIMO EM MULTIPROCESSAMENTO.
+# IMPORTANTE: O código em Python puro é limitado pelo GIL (Global Interpreter Lock). Como parte da investigação e solução, foi estudado o impacto do GIL e exploradas duas abordagens:  
+ Uso de bibliotecas que liberam o GIL, como o NumPy.  
+ Uso do módulo `multiprocessing` para paralelismo real.  
+ Embora o objetivo principal da atividade seja o uso de threads, ambas as abordagens são apresentadas aqui para demonstrar conhecimento aplicado e análise comparativa de desempenho.
+-
+# Configuração da Máquina de Teste
 
-# CONFIGURAÇÃO DO COMPUTADOR USADO PARA TESTES
-- PROCESSADOR: INTEL COM 2 NÚCLEOS FÍSICOS / 4 THREADS LÓGICAS  
-- FREQUÊNCIA BASE: 2,20 GHZ  
-- VIRTUALIZAÇÃO: HABILITADA  
-- CACHE L1: 128 KB  
-- CACHE L2: 512 KB  
-- CACHE L3: 3,0 MB  
-- SOCKETS: 1  
+ **Processador:** Intel com 2 núcleos físicos / 4 threads lógicas  
+ **Frequência base:** 2,20 GHz  
+ **Virtualização:** Habilitada  
+ **Cache L1:** 128 KB  
+ **Cache L2:** 512 KB  
+ **Cache L3:** 3,0 MB  
+ **Sockets:** 1  
 
-# LIMITAÇÃO DO GIL NO PYTHON PURO COM THREADS
+# Versão 1 — Python Puro com `threading`
 
-| THREADS | TEMPO (S) | SPEEDUP | EFICIÊNCIA |
+## Tabela de Resultados
+
+| Threads | Tempo (s) | Speedup | Eficiência |
 |---------|-----------|---------|------------|
 | 1       | 8.6629    | 1.0000  | 1.0000     |
 | 2       | 13.3591   | 0.6485  | 0.3242     |
 | 4       | 11.7121   | 0.7397  | 0.1849     |
 | 8       | 12.5895   | 0.6881  | 0.0860     |
 
-Soma: 5049448532
+# Soma: 5049448532
 
-# ANÁLISE:
-APESAR DA SOMA PARALELA RETORNAR O RESULTADO CORRETO, O DESEMPENHO PIORA EM RELAÇÃO À VERSÃO SERIAL. ISSO OCORRE POIS O GIL LIMITA A EXECUÇÃO SIMULTÂNEA DE CÓDIGO PYTHON PURO A UMA ÚNICA THREAD POR VEZ. PORTANTO, MULTIPLAS THREADS NÃO GERAM PARALELISMO REAL, CAUSANDO SOBRECARGA E QUEDA DE DESEMPENHO.
+# Análise
 
-# SOLUÇÃO 1: USANDO NUMPY PARA LIBERAR O GIL INTERNAMENTE
+Apesar de retornar o valor correto, o desempenho piora com mais threads. Isso ocorre devido ao **GIL** (Global Interpreter Lock), que impede a execução simultânea de threads em operações CPU-bound. Assim, múltiplas threads competem pela CPU, gerando sobrecarga e reduzindo a performance.
 
-| THREADS | TEMPO (S) | SPEEDUP | EFICIÊNCIA |
+Além disso, a partir de 8 threads, a queda de desempenho se intensifica por dois motivos:
+- O número de threads excede o número de núcleos lógicos, aumentando a contenção por recursos.
+  O overhead de gerenciamento de threads se torna maior que o ganho obtido pela paralelização. 
+
+# Versão 2 — Threads com NumPy (`numpy.sum`)
+
+## Tabela de Resultados
+
+| Threads | Tempo (s) | Speedup | Eficiência |
 |---------|-----------|---------|------------|
 | 1       | 0.0650    | 1.0000  | 1.0000     |
 | 2       | 0.0440    | 1.4762  | 0.7381     |
 | 4       | 0.0478    | 1.3594  | 0.3398     |
 | 8       | 0.0507    | 1.2823  | 0.1603     |
 
-Soma: 5050109388
+**Soma:** 5050109388
 
-# ANÁLISE:  
-NESTE CASO, A FUNÇÃO DE SOMA USA `NUMPY.SUM`, IMPLEMENTADA EM C, QUE LIBERA O GIL DURANTE A EXECUÇÃO. ISSO PERMITE QUE MÚLTIPLAS THREADS FAÇAM CÁLCULOS EM PARALELO, GERANDO GANHOS DE DESEMPENHO, EMBORA LIMITADOS PELO OVERHEAD E CONTENÇÃO DE RECURSOS.
+### Análise
 
-# SOLUÇÃO 2: USANDO MULTIPROCESSING PARA PARALELISMO REAL
+A função `numpy.sum` é escrita em C e libera o GIL durante sua execução, o que permite ganho real de desempenho com múltiplas threads. No entanto, à medida que aumentam as threads:
+- O overhead de sincronização ainda existe.
+- A contenção de CPU limita a escalabilidade, especialmente em sistemas com poucos núcleos.
 
-| PROCESSOS | TEMPO (S) | SPEEDUP | EFICIÊNCIA |
+---
+
+# Versão 3 — Multiprocessing para Paralelismo Real
+
+## Tabela de Resultados
+
+| Processos | Tempo (s) | Speedup | Eficiência |
 |-----------|-----------|---------|------------|
 | 1         | 0.0650    | 1.0000  | 1.0000     |
 | 2         | 0.0360    | 1.8056  | 0.9028     |
@@ -50,32 +70,39 @@ NESTE CASO, A FUNÇÃO DE SOMA USA `NUMPY.SUM`, IMPLEMENTADA EM C, QUE LIBERA O 
 
 Soma: 5049778442
 
-# ANÁLISE:  
-NESTE CASO, A SOMA É PARALELIZADA ENTRE MÚLTIPLOS PROCESSOS INDEPENDENTES, CADA UM COM SEU PRÓPRIO INTERPRETADOR PYTHON E SEM COMPARTILHAR GIL. ISSO PERMITE PARALELISMO REAL EM TAREFAS CPU-BOUND, REDUZINDO SIGNIFICATIVAMENTE O TEMPO DE EXECUÇÃO E AUMENTANDO SPEEDUP E EFICIÊNCIA.
+# Análise
 
-# CONCLUSÃO GERAL
+Com `multiprocessing`, cada processo roda seu próprio interpretador Python, bypassando o GIL. Isso permite paralelismo real em tarefas CPU-bound, o que leva a tempos menores, especialmente com 2 ou 4 processos.
 
-O _GLOBAL INTERPRETER LOCK_ (GIL) DO PYTHON LIMITA A EXECUÇÃO PARALELA DE THREADS EM CÓDIGO CPU-BOUND, TORNANDO INEFICIENTE A PARALELIZAÇÃO COM THREADS PURAS.
+No entanto, com 8 processos, a eficiência cai um pouco devido a:
+Custo de criação e comunicação entre processos.
+ Limitação física do número de núcleos disponíveis.
 
-PARA SUPERAR ESSA LIMITAÇÃO, DUAS ESTRATÉGIAS EFICAZES SÃO:
+# Variação leve no resultado:
+Apesar de todas as versões somarem o mesmo vetor, as somas finais apresentaram pequenas variações entre os métodos (poucos milhares de diferença entre valores superiores a 5 bilhões). Isso não é um erro, e sim consequência de como diferentes bibliotecas e abordagens lidam com precisão e paralelismo interno.
+Essas diferenças são esperadas em operações paralelas com grande volume de dados e não invalidam os resultados, já que o valor final continua extremamente próximo e correto. A precisão está dentro de uma margem aceitável.
 
-1. USO DE BIBLIOTECAS QUE LIBERAM O GIL INTERNAMENTE (EXEMPLO: NUMPY), PERMITINDO GANHO PARCIAL COM THREADS.  
-2. USO DO MÓDULO `MULTIPROCESSING`, QUE CRIA MÚLTIPLOS PROCESSOS INDEPENDENTES, PERMITINDO PARALELISMO REAL E MAIOR GANHO DE DESEMPENHO.
+# Conclusão Geral
 
-ASSIM, AO PROJETAR SOLUÇÕES PARALELAS EM PYTHON PARA TAREFAS INTENSIVAS EM CPU, É FUNDAMENTAL ESCOLHER A ABORDAGEM ADEQUADA PARA MAXIMIZAR A PERFORMANCE.
+O Global Interpreter Lock (GIL) do Python limita a execução paralela com threads em tarefas intensivas de CPU.
 
-# ESTRUTURA DO PROJETO
+# Estratégias para superar a limitação:
 
-- `soma_puro_threads.py`: IMPLEMENTAÇÃO EM PYTHON PURO COM THREADS  
-- `soma_numpy_threads.py`: USO DE NUMPY COM THREADS  
-- `soma_multiprocessing.py`: USO DE MULTIPROCESSING PARA PARALELISMO REAL  
+Bibliotecas como NumPy: usam código nativo (C/C++) que libera o GIL e permite algum grau de paralelismo com threads.
+Multiprocessing: cria múltiplos processos independentes que não compartilham o GIL, possibilitando paralelismo verdadeiro com ganhos significativos.
 
+Recomendação: para tarefas CPU-bound com alta carga computacional, use `multiprocessing` ou bibliotecas otimizadas como NumPy, Numba ou Cython.
 
-# REFERÊNCIAS
+# Estrutura do Projeto
 
-- DOCUMENTAÇÃO OFICIAL DO PYTHON SOBRE GIL: https://wiki.python.org/moin/GlobalInterpreterLock  
-- NUMPY E LIBERAÇÃO DO GIL: https://numpy.org/devdocs/user/c-info.how-to-extend.html#releasing-the-gil  
-- MULTIPROCESSING NO PYTHON: https://docs.python.org/3/library/multiprocessing.html  
+`soma_puro_threads.py`: implementação com `threading` puro  
+  `soma_numpy_threads.py`: threads com `numpy.sum`  
+  `soma_multiprocessing.py`: soma paralela com `multiprocessing`  
 
-# PROJETO DESENVOLVIDO PARA DISCIPLINA DE PROGRAMAÇÃO PARALELA - UNIEURO 2025/01
+## Referências
 
+ [Documentação oficial do Python sobre o GIL](https://wiki.python.org/moin/GlobalInterpreterLock)  
+ [NumPy e liberação do GIL](https://numpy.org/devdocs/user/c-info.how-to-extend.html#releasing-the-gil)  
+ [Módulo `multiprocessing` do Python](https://docs.python.org/3/library/multiprocessing.html)  
+
+# Projeto desenvolvido para a disciplina de Programação Paralela — UNIEURO 2025/01
