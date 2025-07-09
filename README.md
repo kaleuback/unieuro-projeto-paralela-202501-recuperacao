@@ -47,7 +47,7 @@ Além disso, a partir de 8 threads, a queda de desempenho se intensifica por doi
 | 4       | 0.0478    | 1.3594  | 0.3398     |
 | 8       | 0.0507    | 1.2823  | 0.1603     |
 
-**Soma:** 5050109388
+# Soma: 5050109388
 
 ### Análise
 
@@ -68,7 +68,7 @@ A função `numpy.sum` é escrita em C e libera o GIL durante sua execução, o 
 | 4         | 0.0220    | 2.9545  | 0.7386     |
 | 8         | 0.0175    | 3.7143  | 0.4643     |
 
-Soma: 5049778442
+# Soma: 5049778442
 
 # Análise
 
