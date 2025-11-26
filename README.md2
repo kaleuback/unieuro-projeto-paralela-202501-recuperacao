@@ -1,0 +1,448 @@
+1) Segurança da API (faça IMEDIATAMENTE)
+
+Se você ainda usa a chave que vazou, revogue-a agora no painel da OpenAI (Platform → API Keys).
+
+Gere uma nova chave e só use localmente / em secrets do HuggingFace.
+
+NUNCA coloque a chave em código versionado. Sempre use .env local e Settings → Secrets no HuggingFace.
+
+Arquivo local .env (não versionar):
+
+OPENAI_API_KEY=sk-...
+
+
+E adicione no .gitignore:
+
+.env
+
+
+
+
+
+2) Preparar ambiente (VS Code)
+
+Instala:
+
+Python 3.10+
+
+VS Code + extensão Python (Pylance opcional)
+
+Git (linha de comando)
+
+No terminal do VS Code:
+
+python --version
+python -m venv .venv
+# Ative o venv
+# Windows:
+.venv\Scripts\activate
+# macOS / Linux:
+source .venv/bin/activate
+
+pip install --upgrade pip
+pip install openai streamlit python-dotenv pandas scikit-learn
+
+
+Crie estrutura de pastas:
+
+meu_classificador_filmes/
+  src/
+    classificador_sentimento.py
+    streamlit_app.py
+  data/
+    imdb_small.csv
+  .env.example
+  requirements.txt
+  README.md
+  .gitignore
+
+
+.gitignore exemplo:
+
+.env
+.venv/
+__pycache__/
+*.pyc
+
+
+requirements.txt mínimo:
+
+openai>=1.0.0
+streamlit
+python-dotenv
+pandas
+scikit-learn
+
+
+.env.example (commitar este, não o .env):
+
+OPENAI_API_KEY=COLOQUE_AQUI_SUA_CHAVE
+
+
+
+
+
+
+
+
+
+
+
+
+
+3) Baixar a base (IMDB) e criar amostra
+
+Baixe do Kaggle: imdb-dataset-of-50k-movie-reviews (CSV).
+
+Coloque em data/imdb.csv.
+
+Para acelerar testes locais, gere uma amostra pequena (ex: 100 reviews):
+
+script scripts/create_sample.py (opcional):
+
+import pandas as pd
+df = pd.read_csv("data/imdb.csv")
+df_sample = df.sample(n=200, random_state=42)
+df_sample.to_csv("data/imdb_small.csv", index=False)
+print("sample created")
+
+
+
+
+
+
+
+
+
+
+
+
+4) Implementação — scripts essenciais
+A — Script de teste rápido (src/classificador_sentimento.py)
+
+Objetivo: testar chamadas à OpenAI + prompt, receber JSON e parsear.
+
+# src/classificador_sentimento.py
+import os
+import json
+from openai import OpenAI
+from dotenv import load_dotenv
+
+load_dotenv()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+def classificar_review(texto):
+    prompt = f"""
+Você é um classificador de reviews de filmes.
+Classifique o sentimento como Positivo, Negativo ou Neutro.
+Review: "{texto}"
+Responda estritamente em JSON:
+{{ "classificacao": "", "justificativa": "" }}
+"""
+    resp = client.chat.completions.create(
+        model="gpt-4.1-nano",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=200
+    )
+    content = resp.choices[0].message["content"].strip()
+    try:
+        # tentativa de parse seguro
+        j = json.loads(content)
+    except Exception:
+        # fallback: tentar extrair manualmente
+        j = {"classificacao": content, "justificativa": ""}
+    return j
+
+if __name__ == "__main__":
+    teste = "O filme foi incrível, atuações sensacionais e roteiro envolvente."
+    print(classificar_review(teste))
+
+
+Importante: use max_tokens controlado; monitore custo. Trate exceções de rate limit e API errors.
+
+B — Streamlit (src/streamlit_app.py)
+# src/streamlit_app.py
+import streamlit as st
+import os, json
+from openai import OpenAI
+from dotenv import load_dotenv
+
+load_dotenv()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+st.set_page_config(page_title="Classificador de Reviews de Filmes", layout="centered")
+st.title("🎬 Classificador de Reviews de Filmes (gpt-4.1-nano)")
+
+texto = st.text_area("Digite a review do usuário:", height=200)
+if st.button("Classificar"):
+    if not texto.strip():
+        st.warning("Escreva um texto antes de classificar.")
+    else:
+        with st.spinner("Consultando a LLM..."):
+            prompt = f"""
+Você é um classificador de reviews de filmes.
+Classifique o sentimento como Positivo, Negativo ou Neutro.
+Review: "{texto}"
+Responda estritamente em JSON:
+{{ "classificacao": "", "justificativa": "" }}
+"""
+            try:
+                resp = client.chat.completions.create(
+                    model="gpt-4.1-nano",
+                    messages=[{"role":"user","content":prompt}],
+                    max_tokens=200
+                )
+                content = resp.choices[0].message["content"].strip()
+                try:
+                    j = json.loads(content)
+                except:
+                    j = {"classificacao": content, "justificativa": ""}
+                st.subheader("Resultado")
+                st.markdown(f"**Classificação:** {j.get('classificacao')}")
+                st.write("**Justificativa:**")
+                st.write(j.get("justificativa"))
+                st.json(j)
+            except Exception as e:
+                st.error(f"Erro na API: {e}")
+
+
+
+
+
+
+
+
+
+
+
+
+5) Rodando localmente e testes
+
+Ative venv e rode:
+
+# testar script
+python src/classificador_sentimento.py
+
+# rodar Streamlit
+streamlit run src/streamlit_app.py
+
+
+Teste com 10 frases variadas (positivo/negativo/neutro). Verifique se a resposta JSON é válida.
+
+
+
+
+
+
+
+
+
+
+
+
+6) Avaliação com dataset (batch) e métricas
+
+Crie src/eval_batch.py para classificar várias reviews e calcular métricas (usando dados rotulados do IMDB):
+
+# src/eval_batch.py
+import pandas as pd
+from classificador_sentimento import classificar_review
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+
+df = pd.read_csv("data/imdb_small.csv")  # colunas: review, sentiment (positive/negative)
+y_true = []
+y_pred = []
+
+for _, row in df.iterrows():
+    text = row['review']
+    gt = row.get('sentiment')  # 'positive'/'negative'
+    res = classificar_review(text)
+    pred = res.get('classificacao', '').lower()
+    # mapear para positive/negative/neutro conforme necessário
+    if 'pos' in pred:
+        p = 'positive'
+    elif 'neg' in pred:
+        p = 'negative'
+    else:
+        p = 'neutral'
+    y_true.append(gt)
+    y_pred.append(p)
+
+print("Accuracy:", accuracy_score(y_true, y_pred))
+print(classification_report(y_true, y_pred))
+print(confusion_matrix(y_true, y_pred))
+
+
+Nota: classificar em batch com a API é caro — faça amostras pequenas (ex.: 50-200) quando estiver testando. Para avaliação em larga escala, prefira um modelo local (não exigido aqui) ou crie prompts mais curtos.
+
+
+
+
+
+
+
+
+
+7) Controle de custo e boas práticas
+
+Use amostras pequenas antes de escalar.
+
+max_tokens conservador (ex.: 150–250).
+
+Reaproveite respostas quando possível (cache).
+
+Use retries exponenciais para erros de rede.
+
+Logs: registre latência e custo por requisição.
+
+
+
+
+
+
+
+
+
+
+8) Versionamento no GitHub (via VS Code)
+
+No terminal / VS Code:
+
+git init
+git add .
+git commit -m "First commit - classificador de filmes"
+git branch -M main
+# criar repo no GitHub via site ou GitHub CLI, então:
+git remote add origin git@github.com:SEU_USUARIO/SEU_REPO.git
+git push -u origin main
+
+
+Verifique .env não foi commitado.
+
+
+
+
+
+
+
+9) Publicar no HuggingFace Spaces (Docker + Streamlit)
+
+No HuggingFace: New → Space → escolha Docker + streamlit template.
+
+Ao criar, vá em Files → substitua requirements.txt e src/streamlit_app.py com seus arquivos.
+
+Em Settings → Secrets adicione:
+
+OPENAI_API_KEY → value = sua nova chave
+
+Clique em App para forçar rebuild.
+
+Teste a interface pública.
+
+Observação: se usar containers Docker custom, inclua variáveis de ambiente no Dockerfile se necessário. O template Streamlit + Secret no HuggingFace é geralmente suficiente.
+
+
+
+
+
+
+
+
+10) Relatório / README / Slides (o que escrever para nota máxima)
+
+Inclua no README.md (e no relatório entregue):
+
+Título e Integrantes
+
+Objetivo (o que foi implementado)
+
+Descrição da arquitetura (OpenAI API, Streamlit, dataset IMDB)
+
+Como rodar local (comandos exatos)
+
+Como publicar no HuggingFace (passos resumidos)
+
+Prompt final usado (cole o prompt JSON que você testou)
+
+Resultados/avaliação (métricas, matriz de confusão, exemplos de classificações corretas / incorretas)
+
+Limitações e riscos (viés, custo, erros do modelo)
+
+Checklist de segurança (revogação de chave antiga, uso de secrets)
+
+Anexos (prints do Streamlit, link do Space, link do GitHub)
+
+Slides (sugestão 8–12 slides):
+
+Slide 1: Título & integrandes
+
+2: Objetivo
+
+3: Arquitetura (diagrama simples)
+
+4: Dataset (IMDB)
+
+5: Prompt + escolhas de design
+
+6: Demonstração (prints ou URL)
+
+7: Métricas e resultados
+
+8: Trabalhos futuros / Conclusão
+
+9: Referências / créditos
+
+
+
+
+
+
+11) Checklist final para nota máxima
+
+Antes de entregar, confirme cada item abaixo:
+
+ Nova chave OpenAI criada e antiga revogada.
+
+ .env no .gitignore (sem chaves no repo).
+
+ Código comentado e funcionando localmente (streamlit run).
+
+ Repositório no GitHub com README claro.
+
+ Space público no HuggingFace com Secret configurado.
+
+ Prompt em versão JSON e versão com justificativa.
+
+ Avaliação com amostra do IMDB (métricas incluidas no relatório).
+
+ Slides prontos para apresentação.
+
+ Link do Space e do GitHub anexados à entrega.
+
+ Demonstrações: 5 exemplos com respostas corretas + 3 exemplos de erro analisados.
+
+Erros comuns e como resolver
+
+Response não é JSON → tratar com try/except e extrair texto.
+
+Rate limit / Timeouts → implementar retries exponenciais.
+
+API key exposta → revogar imediatamente.
+
+Aplicação no HuggingFace não builda → ver logs, garantir requirements corretos e secret presente.
+
+Custo alto → reduzir max_tokens, diminuir número de chamadas, usar amostras.
+
+Se quiser, já faço agora (na mesma resposta) qualquer um destes itens prontos para copiar/colar:
+
+streamlit_app.py final (com tratamento de erros + UI mais bonita).
+
+classificador_sentimento.py final.
+
+README.md completo pronto.
+
+requirements.txt definitivo.
+
+Modelo de slides (texto dos slides).
+
+Me diga qual(is) desses quer que eu gere já (por exemplo: “gera streamlit e README”).
